@@ -75,6 +75,15 @@ The separation is done by
     valence and conduction are bad, we new to run a parallel transport
     to smoothen the gauges.
 """
+# WannierIO 0.3 `gauge_matrices(chk)` returns a dense n_bands x n_wann x n_kpts array;
+# convert to the Vector{Matrix} layout the methods below work on.
+function split_eig(E, U::AbstractArray{<:Complex, 3}, eig_groups)
+    return split_eig(E, [Matrix(U[:, :, ik]) for ik in axes(U, 3)], eig_groups)
+end
+function split_eig(E, U::AbstractArray{<:Complex, 3}, n_val::Int)
+    return split_eig(E, [Matrix(U[:, :, ik]) for ik in axes(U, 3)], n_val)
+end
+
 function split_eig(
         E::Vector{Vector{T}}, U::Vector{Matrix{Complex{T}}}, eig_groups::AbstractVector{R}
     ) where {T <: Real, R <: AbstractVector{Int}}

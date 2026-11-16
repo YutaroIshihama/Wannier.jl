@@ -107,3 +107,7 @@ function Wannier.get_projbandplot(
     end
     return Makie.FigureAxisPlot(fig, ax, p)
 end
+
+function Wannier.get_projbandplot(kpath::Wannier.KPath, eigenvals::AbstractMatrix{<:Real}, projs, labels; kwargs...)
+    return Wannier.get_projbandplot(kpath, [vec(eigenvals[:, ik]) for ik in 1:size(eigenvals, 2)], projs, labels; kwargs...)
+end

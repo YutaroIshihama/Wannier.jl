@@ -19,6 +19,10 @@ Number of kpoints.
 """
 function n_kpoints end
 
+# CrystalBase also defines n_kpoints(::KPath); Wannier defines its own
+# n_kpoints, which shadows the re-exported one, so delegate explicitly.
+n_kpoints(kpath::KPath) = CrystalBase.n_kpoints(kpath)
+
 """
     n_bvectors(::Model)
     n_bvectors(::KspaceStencil)

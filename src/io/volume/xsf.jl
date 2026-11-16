@@ -29,7 +29,14 @@ function read_xsf(filename::AbstractString)
         rgrid = RGrid(xsf.span_vectors, xsf.origin, xsf.X, xsf.Y, xsf.Z)
     end
 
-    return (; xsf.primvec, xsf.convvec, xsf.atoms, xsf.atom_positions, rgrid, xsf.W)
+    return (;
+        xsf.primvec,
+        xsf.convvec,
+        atoms = xsf.atom_labels,
+        xsf.atom_positions,
+        rgrid,
+        xsf.W,
+    )
 end
 
 """

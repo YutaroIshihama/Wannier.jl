@@ -16,6 +16,12 @@ struct MagModel{T <: Real}
     M::Vector{Matrix{Complex{T}}}
 end
 
+# WannierIO 0.3: read_amn(...).A is Array{Complex,3} (nbands, nbands, nkpts)
+# -> Vector{Matrix}, one per k-point.
+function MagModel(up::Model{T}, dn::Model{T}, M::AbstractArray{<:Number, 3}) where {T <: Real}
+    return MagModel{T}(up, dn, [Matrix(M[:, :, ik]) for ik in axes(M, 3)])
+end
+
 function Base.show(io::IO, ::MIME"text/plain", model::MagModel)
     # TODO not sure why but this breaks REPL
     # every time I run any command, it will show this info message?

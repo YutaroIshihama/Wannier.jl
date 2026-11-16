@@ -45,7 +45,9 @@ function _raw_read_w90_hr(prefix::AbstractString, lattice::AbstractMatrix)
         Rspace = WignerSeitzRspace(lattice, hrdat.Rvectors, hrdat.Rdegens)
     end
 
-    return (; Rspace, hamiltonian = hrdat.H)
+    H3 = hrdat.H
+    H = [Matrix(H3[:, :, iR]) for iR in axes(H3, 3)]
+    return (; Rspace, hamiltonian = H)
 end
 
 """
@@ -73,7 +75,7 @@ function write_w90_hr(prefix::AbstractString, hamiltonian::TBOperator; skip_wsve
         "Written by Wannier.jl",
         hamiltonian.Rspace.Rvectors,
         ones(Int, n_Rvectors(hamiltonian)),
-        hamiltonian.operator,
+        cat(hamiltonian.operator...; dims = 3),
     )
     return WannierIO.write_w90_hr_dat(prefix * "_hr.dat", hrdat)
 end

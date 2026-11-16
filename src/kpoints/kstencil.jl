@@ -68,6 +68,38 @@ function KspaceStencil(recip_lattice, kpoints, kpb_k, kpb_G)
     )
 end
 
+# WannierIO 0.3: kpb_k / kpb_G are Matrix (nbvecs, nkpts).
+# Convert to the Vector{Vector} layout ([ik][ib]) used by KspaceStencil.
+_kpb_to_vectors(M::AbstractMatrix) = [[M[ib, ik] for ib in axes(M, 1)] for ik in axes(M, 2)]
+
+function KspaceStencil(
+        recip_lattice, kpoints, kpb_k::AbstractMatrix, kpb_G::AbstractMatrix
+    )
+    return KspaceStencil(
+        recip_lattice, kpoints, _kpb_to_vectors(kpb_k), _kpb_to_vectors(kpb_G)
+    )
+end
+
+function KspaceStencil(
+        recip_lattice,
+        kgrid_size,
+        kpoints,
+        bvectors,
+        bweights,
+        kpb_k::AbstractMatrix,
+        kpb_G::AbstractMatrix,
+    )
+    return KspaceStencil(
+        recip_lattice,
+        kgrid_size,
+        kpoints,
+        bvectors,
+        bweights,
+        _kpb_to_vectors(kpb_k),
+        _kpb_to_vectors(kpb_G),
+    )
+end
+
 """
     $(SIGNATURES)
 

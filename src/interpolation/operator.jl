@@ -147,12 +147,87 @@ Fourier transform is a simple sum (and is faster).
 """
 function simplify end
 
-function WannierIO.RvectorReducer(Rspace::MDRSRspace)
-    return WannierIO.RvectorReducer(Rspace.Rvectors, Rspace.n_Rdegens, Rspace.Tvectors, Rspace.n_Tdegens)
+"""
+    RvectorReducer
+
+Functor that simplifies R-vectors, replacing the removed `WannierIO.RvectorReducer`.
+
+# Fields
+- `Rvectors`: simplified R-vectors (`R` for Wigner-Seitz, `R + T` for MDRS)
+- `contribs`: for each simplified R-vector index, list of
+  `(old_index, m, n, weight)` contributions. `m == n == 0` means
+  "whole operator at `old_index`, scaled by `weight`"
+  (Wigner-Seitz case); otherwise only element `(m, n)` of the
+  operator at `old_index` contributes.
+"""
+struct RvectorReducer
+    Rvectors::Vector{Vec3{Int}}
+    contribs::Vector{Vector{Tuple{Int, Int, Int, Float64}}}
 end
 
-function WannierIO.RvectorReducer(Rspace::WignerSeitzRspace)
-    return WannierIO.RvectorReducer(Rspace.Rvectors, Rspace.n_Rdegens)
+function RvectorReducer(Rvectors::AbstractVector, n_Rdegens::AbstractVector)
+    Rvecs = Vector{Vec3{Int}}(Rvectors)
+    contribs = map(enumerate(n_Rdegens)) do (i, d)
+        [(i, 0, 0, 1.0 / d)]
+    end
+    return RvectorReducer(Rvecs, contribs)
+end
+
+function RvectorReducer(
+        Rvectors::AbstractVector,
+        n_Rdegens::AbstractVector,
+        Tvectors::AbstractVector,
+        n_Tdegens::AbstractVector,
+    )
+    # Expand R̃ = R + T, deduplicate in first-appearance order.
+    new_Rvectors = Vec3{Int}[]
+    index_of = Dict{Vec3{Int}, Int}()
+    contribs = Vector{Tuple{Int, Int, Int, Float64}}[]
+    for (iR, R) in enumerate(Rvectors)
+        Tv = Tvectors[iR]
+        Td = n_Tdegens[iR]
+        nwann_m, nwann_n = size(Tv)
+        for m in 1:nwann_m, n in 1:nwann_n
+            w = 1.0 / (n_Rdegens[iR] * Td[m, n])
+            for T in Tv[m, n]
+                Rt = R + T
+                j = get(index_of, Rt, 0)
+                if iszero(j)
+                    push!(new_Rvectors, Rt)
+                    push!(contribs, Tuple{Int, Int, Int, Float64}[])
+                    j = length(new_Rvectors)
+                    index_of[Rt] = j
+                end
+                push!(contribs[j], (iR, m, n, w))
+            end
+        end
+    end
+    return RvectorReducer(new_Rvectors, contribs)
+end
+
+RvectorReducer(Rspace::MDRSRspace) = RvectorReducer(
+    Rspace.Rvectors, Rspace.n_Rdegens, Rspace.Tvectors, Rspace.n_Tdegens
+)
+RvectorReducer(Rspace::WignerSeitzRspace) =
+    RvectorReducer(Rspace.Rvectors, Rspace.n_Rdegens)
+
+function (reducer::RvectorReducer)(operators::AbstractVector)
+    # Zero-filled output, same element type as input.
+    out = [zero.(O) for O in [operators[1] for _ in 1:length(reducer.Rvectors)]]
+    # `zero.(O)` above broadcasts; for plain matrices it is `zero(O)`.
+    # Rebuild correctly for the common matrix case:
+    out = [zero(operators[1]) for _ in 1:length(reducer.Rvectors)]
+    for (j, cs) in enumerate(reducer.contribs)
+        for (iR, m, n, w) in cs
+            O = operators[iR]
+            if m == 0 && n == 0
+                out[j] = out[j] + O .* w
+            else
+                out[j][m, n] = out[j][m, n] + O[m, n] * w
+            end
+        end
+    end
+    return out
 end
 
 function simplify(Rspace::Union{MDRSRspace,WignerSeitzRspace}, operators::AbstractVector...)

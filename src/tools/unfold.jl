@@ -36,17 +36,17 @@ function unfold(
     )
     nnkp = read_nnkp("$prefix.nnkp")
     kstencil = Wannier.KspaceStencil(
-        nnkp["recip_lattice"], nnkp["kpoints"], nnkp["kpb_k"], nnkp["kpb_G"]
+        nnkp.recip_lattice, nnkp.kpoints, nnkp.kpb_k, nnkp.kpb_G
     )
 
     isym = read_isym("$prefix.isym")
     # TODO really needed?
-    Wannier.rescale!(isym.repmat_band)
+    Wannier.rescale!(isym.littlegroup_reps)
 
     kpoints_ibz = isym.kpoints_ibz
     symops = isym.symops
-    repmat_band = isym.repmat_band
-    repmat_wann = isym.repmat_wann
+    repmat_band = isym.littlegroup_reps
+    repmat_wann = isym.orbital_reps
 
     f2i = get_kpoint_mappings(kstencil.kpoints, kpoints_ibz, symops)
 
@@ -58,7 +58,7 @@ function unfold(
     # amn
     Ai = WannierIO.read_amn("$prefix.iamn").A
     # The factor exp(-i kᵢ R_{n'}) appearing in CPC Eq. 9
-    centers = [p.center for p in nnkp["projections"]]
+    centers = [p.center for p in nnkp.projections]
     Rs = Wannier.find_wf_symmetry_translations(centers, symops, repmat_wann)
     Asymm = Wannier.symmetrize_gauges(Ai, kpoints_ibz, symops, repmat_band, repmat_wann, Rs)
     Af = Wannier.unfold_gauges(Asymm, kpoints_ibz, f2i, symops, repmat_wann, Rs)

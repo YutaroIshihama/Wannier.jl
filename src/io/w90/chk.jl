@@ -62,6 +62,19 @@ function write_chk(
         Uml = gauges
     end
     overlaps = transform_gauge(model.overlaps, model.kstencil.kpb_k, gauges)
+    # Vector layout -> dense arrays for WannierIO 0.3 Chk
+    Udis3 = cat(Udis...; dims = 3)
+    Uml3 = cat(Uml...; dims = 3)
+    nkpts_c = length(overlaps)
+    nbvecs_c = length(overlaps[1])
+    nw_c = size(overlaps[1][1], 1)
+    M4 = zeros(ComplexF64, nw_c, nw_c, nbvecs_c, nkpts_c)
+    for ik in 1:nkpts_c, ib in 1:nbvecs_c
+        M4[:, :, ib, ik] .= overlaps[ik][ib]
+    end
+    Udis = Udis3
+    Uml = Uml3
+    overlaps = M4
 
     chk = WannierIO.Chk(
         header,
@@ -73,7 +86,7 @@ function write_chk(
         checkpoint,
         have_disentangled,
         Ω.ΩI,
-        model.entangled_bands,
+        BitMatrix(hcat(model.entangled_bands...)),
         Udis,
         Uml,
         overlaps,
@@ -128,7 +141,10 @@ function Model(chk::WannierIO.Chk; kmesh_tol = default_w90_kmesh_tol())
     @warn "chk file does not contain info on frozen bands, set all to false"
 
     # the M in chk is already rotated by the U matrix
-    overlaps = chk.M
+    # WannierIO 0.3: M is Array{Complex,4} (nwann, nwann, nbvecs, nkpts)
+    # -> Vector{Vector{Matrix}}
+    M4 = chk.M
+    overlaps = [[Matrix(M4[:, :, ib, ik]) for ib in axes(M4, 3)] for ik in axes(M4, 4)]
     # set U matrix as identity
     T = eltype(overlaps[1][1])
     gauges = identity_gauge(T, chk.n_kpts, chk.n_wann)

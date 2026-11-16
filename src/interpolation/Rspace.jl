@@ -183,6 +183,32 @@ function MDRSRspace(
     return MDRSRspace{T}(Mat3(lattice), Rvectors, n_Rdegens, Tvectors, n_Tdegens)
 end
 
+# Convert the `WannierIO.WsvecDat` layout
+# `Tvectors[m, n, iR]`, `Tdegens[m, n, iR]`
+# to the `MDRSRspace` layout
+# `Tvectors[iR][m, n]`, `n_Tdegens[iR][m, n]`.
+function MDRSRspace(
+        lattice::AbstractMatrix,
+        Rvectors::AbstractVector,
+        n_Rdegens::AbstractVector,
+        Tvectors::AbstractArray{<:AbstractVector, 3},
+        n_Tdegens::AbstractArray{<:Integer, 3},
+    )
+    nwann_m, nwann_n, nRvecs = size(Tvectors)
+    @assert size(n_Tdegens) == size(Tvectors) "Tvectors / Tdegens size mismatch"
+    Tv = Vector{Matrix{Vector{Vec3{Int}}}}(undef, nRvecs)
+    Td = Vector{Matrix{Int}}(undef, nRvecs)
+    for iR in 1:nRvecs
+        Tv[iR] = Matrix{Vector{Vec3{Int}}}(undef, nwann_m, nwann_n)
+        Td[iR] = Matrix{Int}(undef, nwann_m, nwann_n)
+        for m in 1:nwann_m, n in 1:nwann_n
+            Tv[iR][m, n] = Tvectors[m, n, iR]
+            Td[iR][m, n] = n_Tdegens[m, n, iR]
+        end
+    end
+    return MDRSRspace(lattice, Rvectors, n_Rdegens, Tv, Td)
+end
+
 function MDRSRspace(
         wsRspace::WignerSeitzRspace,
         Rgrid_size::Union{AbstractVector, Tuple},

@@ -11,7 +11,7 @@ returns a `NamedTuple`).
 """
 function read_nnkp_compute_bweights(filename::AbstractString)
     nnkp = WannierIO.read_nnkp(filename)
-    return KspaceStencil(nnkp["recip_lattice"], nnkp["kpoints"], nnkp["kpb_k"], nnkp["kpb_G"])
+    return KspaceStencil(nnkp.recip_lattice, nnkp.kpoints, nnkp.kpb_k, nnkp.kpb_G)
 end
 
 """
@@ -28,10 +28,10 @@ function WannierIO.read_nnkp(
     )
     nnkp = WannierIO.read_nnkp(filename)
 
-    kpoints = nnkp["kpoints"]
-    recip_lattice = nnkp["recip_lattice"]
-    kpb_k = nnkp["kpb_k"]
-    kpb_G = nnkp["kpb_G"]
+    kpoints = nnkp.kpoints
+    recip_lattice = nnkp.recip_lattice
+    kpb_k = nnkp.kpb_k
+    kpb_G = nnkp.kpb_G
     kgrid_size = guess_kgrid_size(kpoints)
     bvectors = get_bvectors(recip_lattice, kpoints, kpb_k, kpb_G)
 
@@ -68,17 +68,29 @@ Write nnkp that can be used by `pw2wannier90`.
     For other keyword arguments, see [`WannierIO.write_nnkp`](@ref).
 """
 function write_nnkp(filename::AbstractString, kstencil::KspaceStencil; kwargs...)
-    params = OrderedDict{String, Any}(
-        "lattice" => real_lattice(kstencil),
-        "recip_lattice" => reciprocal_lattice(kstencil),
-        "kpoints" => kstencil.kpoints,
-        "kpb_k" => kstencil.kpb_k,
-        "kpb_G" => kstencil.kpb_G,
-    )
-    for (k, v) in kwargs
-        params[string(k)] = v
+    # WannierIO 0.3: write_nnkp takes a Nnkp struct, not a dict.
+    # kpb_* are converted back to Matrix (nbvecs, nkpts) layout.
+    nbvecs = length(kstencil.kpb_k[1])
+    nkpts = length(kstencil.kpb_k)
+    kpb_k_mat = zeros(Int, nbvecs, nkpts)
+    kpb_G_mat = zeros(WannierIO.Vec3{Int}, nbvecs, nkpts)
+    for ik in 1:nkpts, ib in 1:nbvecs
+        kpb_k_mat[ib, ik] = kstencil.kpb_k[ik][ib]
+        kpb_G_mat[ib, ik] = kstencil.kpb_G[ik][ib]
     end
-    return WannierIO.write_nnkp(filename, params)
+    kw = Dict{Symbol, Any}(kwargs)
+    nnkp = WannierIO.Nnkp(;
+        lattice = real_lattice(kstencil),
+        recip_lattice = reciprocal_lattice(kstencil),
+        kpoints = kstencil.kpoints,
+        kpb_k = kpb_k_mat,
+        kpb_G = kpb_G_mat,
+        projections = get(kw, :projections, nothing),
+        spinor_projections = get(kw, :spinor_projections, nothing),
+        auto_projections = get(kw, :auto_projections, nothing),
+        exclude_bands = get(kw, :exclude_bands, Int[]),
+    )
+    return WannierIO.write_nnkp(filename, nnkp)
 end
 
 """
@@ -123,6 +135,24 @@ function has_cubic_neighbors(
     return true
 end
 
+# WannierIO 0.3 stores kpb_k / kpb_G as nbvec x nkpts matrices; convert to
+# the per-kpoint nested layout the method above works on.
+function has_cubic_neighbors(
+        kpoints::AbstractVector,
+        kpb_k::AbstractMatrix,
+        kpb_G::AbstractMatrix;
+        kgrid_size::AbstractVector = guess_kgrid_size(kpoints),
+        atol::AbstractFloat = 1.0e-6,
+    )
+    nkpts = size(kpb_k, 2)
+    return has_cubic_neighbors(
+        kpoints,
+        [vec(kpb_k[:, ik]) for ik in 1:nkpts],
+        [vec(kpb_G[:, ik]) for ik in 1:nkpts];
+        kgrid_size, atol,
+    )
+end
+
 function has_cubic_neighbors(kstencil::KspaceStencil; atol::AbstractFloat = 1.0e-6)
     return has_cubic_neighbors(
         kstencil.kpoints, kstencil.kpb_k, kstencil.kpb_G; kstencil.kgrid_size, atol
@@ -131,7 +161,7 @@ end
 
 function has_cubic_neighbors(filename::AbstractString; atol::AbstractFloat = 1.0e-6)
     nnkp = read_nnkp(filename)
-    return has_cubic_neighbors(nnkp["kpoints"], nnkp["kpb_k"], nnkp["kpb_G"]; atol)
+    return has_cubic_neighbors(nnkp.kpoints, nnkp.kpb_k, nnkp.kpb_G; atol)
 end
 
 """

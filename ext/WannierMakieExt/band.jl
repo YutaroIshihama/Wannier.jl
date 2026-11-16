@@ -50,18 +50,15 @@ end
 end
 
 function get_xtick_indices_labels(kpath::Wannier.KPath)
-    # Labels of high-symmetry kpoints
-    labs = CrystalBase.unicode_kpoint_labels(kpath.labels)
-    # Indices and labels of merged high-symmetry kpoints
-    xt_idxs, xt_labs = CrystalBase.merge_nearby_labels(kpath.indices, labs)
-    return xt_idxs, xt_labs
+    t = CrystalBase.ticks(CrystalBase.unicode_kpoint_labels(kpath))
+    return t.indices, t.labels
 end
 
 function Makie.plot!(
         p::BandPlot{Tuple{K, E}}
     ) where {K <: Wannier.KPath, E <: AbstractVector{<:AbstractVector{<:Real}}}
     map!(p.attributes, [:kpath], :nkpts) do kpath
-        return length(kpath)
+        return CrystalBase.n_kpoints(kpath)
     end
     map!(p.attributes, [:eigenvals], :nbands) do eigenvals
         p.nkpts[] == length(eigenvals) || error("Length of eigenvals does not match length of kpoints")
@@ -69,7 +66,7 @@ function Makie.plot!(
     end
     # Cumulative distance along kpath
     map!(p.attributes, [:kpath], :x) do kpath
-        return Wannier.linear_path(kpath)[1]
+        return CrystalBase.cumulative_distances(kpath)
     end
     # Positions of vertical lines at high-symmetry kpoints
     map!(p.attributes, [:kpath, :x], :x_ksym) do kpath, x
@@ -147,7 +144,7 @@ function fig_ax_bandplot(kpath::Wannier.KPath; kwargs...)
     ax.ylabel = ylabel
     ax.ygridvisible = false
 
-    x = Wannier.linear_path(kpath)[1]
+    x = CrystalBase.cumulative_distances(kpath)
     xlims!(ax, [minimum(x), maximum(x)])
 
     xt_idxs, xt_labs = get_xtick_indices_labels(kpath)
@@ -162,6 +159,13 @@ end
 This is a bit hacky: the recipe only works with the Plot, but we want to
 set the ylabel of the Axis, etc. Therefore, we need this wrapper function.
 =#
+
+# WannierIO.read_w90_band returns eigenvalues as an n_bands x n_kpts Matrix;
+# the recipes below work on Vector{Vector} (outer index = k-point).
+_to_vecvec(eigenvals::AbstractMatrix{<:Real}) =
+    [vec(eigenvals[:, ik]) for ik in 1:size(eigenvals, 2)]
+_to_vecvec(eigenvals::AbstractVector{<:AbstractVector{<:Real}}) = eigenvals
+
 function Wannier.get_bandplot(
     kpath::Wannier.KPath, eigenvals::E; kwargs...
     ) where {E <: AbstractVector{<:AbstractVector{<:Real}}}
@@ -198,4 +202,11 @@ function Wannier.get_bandplot(
     # Just return the primary plot, as with FigureAxisPlot, the returned plot
     # is automatically displaed.
     return Makie.FigureAxisPlot(fig, ax, plots[1])
+end
+
+function Wannier.get_bandplot(kpath::Wannier.KPath, eigenvals::AbstractMatrix{<:Real}; kwargs...)
+    return Wannier.get_bandplot(kpath, _to_vecvec(eigenvals); kwargs...)
+end
+function Wannier.get_bandplot(kpath::Wannier.KPath, eigenvals1::AbstractMatrix{<:Real}, eigenvals2::AbstractMatrix{<:Real}; kwargs1 = (;), kwargs2 = (;))
+    return Wannier.get_bandplot(kpath, _to_vecvec(eigenvals1), _to_vecvec(eigenvals2); kwargs1, kwargs2)
 end

@@ -23,10 +23,14 @@ function read_w90(prefix::AbstractString; ortho_amn::Bool = true, use_mmn_bvecs:
 
     isfile(prefix * ".mmn") || error("$(prefix).mmn file does not exist")
     mmn = read_mmn(prefix * ".mmn")
-    overlaps = mmn.M
-    kpb_k = mmn.kpb_k
-    kpb_G = mmn.kpb_G
-    nbvecs = length(overlaps[1])
+    # WannierIO 0.3: M is Array{Complex,4} (nbands, nbands, nbvecs, nkpts),
+    # kpb_k / kpb_G are Matrix (nbvecs, nkpts).
+    # Wannier.jl Model / KspaceStencil expect Vector-of-Vector layout.
+    M4 = mmn.M
+    nbvecs = size(M4, 3)
+    overlaps = [[Matrix(M4[:, :, ib, ik]) for ib in 1:nbvecs] for ik in 1:nkpts]
+    kpb_k = [[mmn.kpb_k[ib, ik] for ib in 1:nbvecs] for ik in 1:nkpts]
+    kpb_G = [[mmn.kpb_G[ib, ik] for ib in 1:nbvecs] for ik in 1:nkpts]
     # check consistency for mmn
     @assert nkpts == length(overlaps) "different n_kpoints in mmn and win files"
     @assert (nbands, nbands) == size(overlaps[1][1]) "different n_bands in mmn and win files"
@@ -49,7 +53,8 @@ function read_w90(prefix::AbstractString; ortho_amn::Bool = true, use_mmn_bvecs:
         if ortho_amn
             gauges = read_amn_ortho("$prefix.amn")
         else
-            gauges = read_amn("$prefix.amn").A
+            A3 = read_amn("$prefix.amn").A
+            gauges = [Matrix(A3[:, :, ik]) for ik in axes(A3, 3)]
         end
         @assert nkpts == length(gauges) "different n_kpoints in amn and win files"
         @assert (nbands, nwann) == size(gauges[1]) "different n_bands or n_wannier in amn and win files"
@@ -60,7 +65,9 @@ function read_w90(prefix::AbstractString; ortho_amn::Bool = true, use_mmn_bvecs:
 
     disentangle = nbands != nwann
     if isfile(prefix * ".eig")
-        eigenvalues = read_eig(prefix * ".eig")
+        Emat = read_eig(prefix * ".eig")
+        # WannierIO 0.3: Matrix (nbands, nkpts) -> Vector{Vector}
+        eigenvalues = [Vector(Emat[:, ik]) for ik in axes(Emat, 2)]
         @assert nkpts == length(eigenvalues) "different n_kpoints in eig and win files"
         @assert nbands == length(eigenvalues[1]) "different n_bands in eig and win files"
     else
@@ -107,7 +114,8 @@ Return a `Model` with U matrix filled by that from a chk file.
 function read_w90_with_chk(prefix::AbstractString, chk::AbstractString = "$prefix.chk")
     model = read_w90(prefix)
     fchk = read_chk(chk)
-    model.gauges .= WannierIO.gauge_matrices(fchk)
+    U3 = WannierIO.gauge_matrices(fchk)
+    model.gauges .= [Matrix(U3[:, :, ik]) for ik in axes(U3, 3)]
     return model
 end
 
@@ -122,19 +130,26 @@ Write `Model` into `eig`, `mmn`, `amn` files.
 function write_w90(prefix::AbstractString, model::Model; binary::Bool = false)
     outname(suffix) = "$prefix.$suffix"
 
-    write_eig(outname("eig"), model.eigenvalues; binary)
-    write_mmn(outname("mmn"), model.overlaps, model.kstencil; binary)
-    write_amn(outname("amn"), model.gauges; binary)
+    # Model (Vector layout) -> WannierIO 0.3 (dense array / Mmn struct)
+    Emat = hcat(model.eigenvalues...)
+    A3 = cat(model.gauges...; dims = 3)
+    nkpts_w = length(model.overlaps)
+    nbvecs_w = length(model.overlaps[1])
+    nbands_w = size(model.overlaps[1][1], 1)
+    M4 = zeros(ComplexF64, nbands_w, nbands_w, nbvecs_w, nkpts_w)
+    for ik in 1:nkpts_w, ib in 1:nbvecs_w
+        M4[:, :, ib, ik] .= model.overlaps[ik][ib]
+    end
+    kpb_k_mat = zeros(Int, nbvecs_w, nkpts_w)
+    kpb_G_mat = zeros(WannierIO.Vec3{Int}, nbvecs_w, nkpts_w)
+    for ik in 1:nkpts_w, ib in 1:nbvecs_w
+        kpb_k_mat[ib, ik] = model.kstencil.kpb_k[ik][ib]
+        kpb_G_mat[ib, ik] = model.kstencil.kpb_G[ik][ib]
+    end
+    mmn_out = WannierIO.Mmn("Written by Wannier.jl", M4, kpb_k_mat, kpb_G_mat)
+    write_eig(outname("eig"), Emat; binary)
+    write_mmn(outname("mmn"), mmn_out; binary)
+    write_amn(outname("amn"), A3; binary)
     return nothing
 end
 
-"""
-    $(SIGNATURES)
-
-Generate a `KPath` for the `Model`.
-
-"""
-function CrystalBase.KSegment(model::Model)
-    # kseg = CrystalBase.KSegment(win["unit_cell_cart"], win["kpoint_path"])
-    return KSegment(model.lattice, model.atom_positions, model.atom_labels)
-end

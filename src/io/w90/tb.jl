@@ -43,13 +43,20 @@ function _raw_read_w90_tb(prefix::AbstractString)
         Rspace = WignerSeitzRspace(tbdat.lattice, tbdat.Rvectors, tbdat.Rdegens)
     end
 
+    # WannierIO 0.3: H / rx / ry / rz are Array{...,3} (nwann, nwann, nRvecs)
+    # -> Vector{Matrix}
+    H3 = tbdat.H
+    H = [Matrix(H3[:, :, iR]) for iR in axes(H3, 3)]
     # convert to matrix of MVec3, here mutable since we might need to invoke
     # some in-place functions in later interpolation steps
-    position = map(zip(tbdat.r_x, tbdat.r_y, tbdat.r_z)) do (x, y, z)
-        MVec3.(x, y, z)
-    end
+    nw = size(tbdat.rx, 1)
+    nR = size(tbdat.rx, 3)
+    position = [
+        [MVec3(tbdat.rx[m, n, iR], tbdat.ry[m, n, iR], tbdat.rz[m, n, iR]) for m in 1:nw, n in 1:nw]
+        for iR in 1:nR
+    ]
 
-    return (; Rspace, hamiltonian = tbdat.H, position)
+    return (; Rspace, hamiltonian = H, position)
 end
 
 """

@@ -60,13 +60,34 @@ Wannier interface code, i.e., they should contain `n_bands`-sized matrices
 instead of Wannier-gauge `n_wannier`-sized matrices, to minimize the effect
 of band truncation.
 """
+
+# Dimension check for the nested layout used by Wannier.jl:
+# overlaps[ik][ib] is n_bands x n_bands, kpb_k[ik][ib] / kpb_G[ik][ib] one entry per b-vector.
+function _check_dimensions_M_kpb_nested(overlaps, kpb_k, kpb_G)
+    nkpts = length(kpb_k)
+    length(overlaps) == nkpts || throw(DimensionMismatch("overlaps and kpb_k have different n_kpts"))
+    length(kpb_G) == nkpts || throw(DimensionMismatch("kpb_G and kpb_k have different n_kpts"))
+    for ik in 1:nkpts
+        nbvecs = length(kpb_k[ik])
+        length(overlaps[ik]) == nbvecs || throw(DimensionMismatch("overlaps[ik] and kpb_k[ik] have different n_bvecs"))
+        length(kpb_G[ik]) == nbvecs || throw(DimensionMismatch("kpb_G[ik] and kpb_k[ik] have different n_bvecs"))
+        for ib in 1:nbvecs
+            n_bands = size(overlaps[ik][ib], 1)
+            n_bands > 0 || throw(ArgumentError("Empty overlaps, n_bands = 0"))
+            size(overlaps[ik][ib], 2) == n_bands || throw(DimensionMismatch("overlaps[ik][ib] is not a square matrix"))
+            length(kpb_G[ik][ib]) == 3 || throw(DimensionMismatch("kpb_G entries are not 3-vectors"))
+        end
+    end
+    return nothing
+end
+
 function compute_uHu(
         overlaps::AbstractVector,
         kpb_k::AbstractVector,
         kpb_G::AbstractVector,
         eigenvalues::AbstractVector,
     )
-    WannierIO._check_dimensions_M_kpb(overlaps, kpb_k, kpb_G)
+    _check_dimensions_M_kpb_nested(overlaps, kpb_k, kpb_G)
     nkpts = length(kpb_k)
     @assert nkpts == length(eigenvalues) "wrong n_kpoints in eigenvalues"
 
@@ -103,7 +124,7 @@ function compute_hamiltonian_times_position_kspace(
         kpb_G::AbstractVector,
         eigenvalues::AbstractVector,
     )
-    WannierIO._check_dimensions_M_kpb(overlaps, kpb_k, kpb_G)
+    _check_dimensions_M_kpb_nested(overlaps, kpb_k, kpb_G)
     nkpts = length(kpb_k)
     @assert nkpts == length(eigenvalues) "wrong n_kpoints in eigenvalues"
 
