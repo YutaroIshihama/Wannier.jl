@@ -27,7 +27,7 @@ end
     kpath, eigenvals = read_w90_band(dataset"Si2_valence/outputs/MDRS/Si2_valence", recip_lattice)
     # Fake projections
     nprojs = 2
-    U = rand_gauge(ComplexF64, length(kpath), length(eigenvals[1]), nprojs)
+    U = rand_gauge(ComplexF64, n_kpoints(kpath), size(eigenvals, 1), nprojs)
     projs = Wannier.projectability(U)
     labels = ["WF $i" for i in 1:nprojs]
 

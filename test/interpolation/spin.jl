@@ -19,16 +19,15 @@
     # digits. Therefore, I read the win file and construct the kpoints myself.
     # kpoints = ref_kpt.kpoints
     win = read_win(dataset"Fe_soc/Fe.win")
-    kseg = KSegment(reciprocal_lattice(win["unit_cell_cart"]), win["kpoint_path"])
-    kpath = KPath(kseg)
+    kpath = KPath(reciprocal_lattice(win["unit_cell_cart"]), win["kpoint_path"])
     # postw90.x has a bug, it misses the `H` point at 417
-    kpoints = collect(kpath)
+    kpoints = Wannier.kpoints(kpath)
     deleteat!(kpoints, 417)
     @test all(norm.(kpoints - ref_kpt.kpoints) .< 1.0e-6)
     ##
     eigenvalues = HamiltonianInterpolator(hamiltonian)(kpoints)[1]
-    @test all(norm.(eigenvalues - ref_dat.eigenvalues) .< 2.0e-6)
+    @test all(norm.(hcat(eigenvalues...) - ref_dat.eigenvalues) .< 2.0e-6)
 
     Sz = interp(kpoints)
-    @test all(isapprox.(Sz, ref_dat.extras; atol = 5.0e-5))
+    @test all(isapprox.(hcat(Sz...), ref_dat.extras; atol = 5.0e-5))
 end

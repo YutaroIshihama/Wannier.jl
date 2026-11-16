@@ -19,12 +19,19 @@ end
     @test gauges ≈ model.gauges
 
     eigenvalues = read_eig("$outprefix.eig")
-    @test eigenvalues ≈ model.eigenvalues
+    # read_eig is dense (nbands x nk), model.eigenvalues is nested per k
+    @test eigenvalues ≈ hcat(model.eigenvalues...)
 
     mmn = read_mmn("$outprefix.mmn")
-    @test mmn.M ≈ model.overlaps
-    @test mmn.kpb_k == model.kpb_k
-    @test mmn.kpb_G == model.kpb_G
+    # mmn.M is dense (nb x nb x nbvec x nk), model.overlaps nested per k, per b
+    M_dense = zeros(ComplexF64, size(mmn.M))
+    for (ik, per_k) in enumerate(model.overlaps), (ib, m) in enumerate(per_k)
+        M_dense[:, :, ib, ik] .= m
+    end
+    @test mmn.M ≈ M_dense
+    # mmn.kpb_* are dense (nbvec x nk), model.kpb_* nested per k
+    @test mmn.kpb_k == hcat(model.kpb_k...)
+    @test mmn.kpb_G == hcat(model.kpb_G...)
 end
 
 @testitem "read_w90_with_chk" begin
@@ -52,9 +59,10 @@ end
     @test model.kgrid_size == chk.kgrid
     @test model.kpoints ≈ chk.kpoints
     @test true == chk.have_disentangled
-    @test model.entangled_bands == chk.dis_bands
+    @test BitMatrix(hcat(model.entangled_bands...)) == chk.dis_bands
     # the Hamiltonian rotated by Udis must be diagonal, according to W90 convention
-    H = transform_gauge(model.eigenvalues, WannierIO.gauge_matrices_dis(chk))
+    _Udis = WannierIO.gauge_matrices_dis(chk)
+    H = transform_gauge(model.eigenvalues, [Matrix(_Udis[:, :, ik]) for ik in axes(_Udis, 3)])
     # this is too strict, even
     #   norm(H[:, :, ik] - Hdiag[:, :, ik]) ≈ 1e-14
     # is still false
@@ -64,10 +72,15 @@ end
     end
     @test H ≈ Hdiag
     # the unitary matrix should be the same
-    @test model.gauges ≈ WannierIO.gauge_matrices(chk)
+    @test cat(model.gauges...; dims = 3) ≈ WannierIO.gauge_matrices(chk)
 
     M = transform_gauge(model.overlaps, model.kpb_k, model.gauges)
-    @test M ≈ chk.M
+    # M nested per k, per b; chk.M dense (nb x nb x nbvec x nk)
+    M_dense = zeros(ComplexF64, size(chk.M))
+    for (ik, per_k) in enumerate(M), (ib, m) in enumerate(per_k)
+        M_dense[:, :, ib, ik] .= m
+    end
+    @test M_dense ≈ chk.M
     Ω = omega(model, model.gauges)
     @test Ω.ΩI ≈ chk.ΩI
     @test Ω.r ≈ chk.r
@@ -83,5 +96,10 @@ end
     @test chk.recip_lattice ≈ reciprocal_lattice(model)
     @test chk.kgrid == model.kgrid_size
     @test chk.kpoints ≈ model.kpoints
-    @test chk.M ≈ model.overlaps
+    # chk.M dense, model.overlaps nested
+    _M_dense = zeros(ComplexF64, size(chk.M))
+    for (ik, per_k) in enumerate(model.overlaps), (ib, m) in enumerate(per_k)
+        _M_dense[:, :, ib, ik] .= m
+    end
+    @test chk.M ≈ _M_dense
 end

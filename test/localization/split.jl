@@ -41,14 +41,12 @@ end
     nk = n_kpoints(model)
     nb = n_bands(model)
     nw = n_wannier(model)
-    UVv = [similar(U[1], nb, n_val) for i in 1:nk]
-    UVc = [similar(U[1], nb, nw - n_val) for i in 1:nk]
-    for ik in 1:nk
-        UVv[ik] = U[ik] * Vv[ik]
-        UVc[ik] = U[ik] * Vc[ik]
-    end
-    Mv = transform_gauge(M, model.kpb_k, UVv)
-    Mc = transform_gauge(M, model.kpb_k, UVc)
+    # Only U, Vv/Vc are dense (WannierIO 0.3); M and kpb_k are
+    # already in the nested layout transform_gauge expects.
+    UVv_nested = [Matrix(U[:, :, ik]) * Matrix(Vv[:, :, ik]) for ik in 1:nk]
+    UVc_nested = [Matrix(U[:, :, ik]) * Matrix(Vc[:, :, ik]) for ik in 1:nk]
+    Mv = transform_gauge(M, model.kpb_k, UVv_nested)
+    Mc = transform_gauge(M, model.kpb_k, UVc_nested)
 
     Mv_ref = model_val.overlaps
     Mc_ref = model_cond.overlaps
@@ -85,7 +83,8 @@ end
 
 @testitem "split_model" setup = [SplitEnv] begin
     model_test = deepcopy(model)
-    model_test.gauges .= WannierIO.gauge_matrices(chk)
+    _Uchk = WannierIO.gauge_matrices(chk)
+    model_test.gauges .= [Matrix(_Uchk[:, :, ik]) for ik in axes(_Uchk, 3)]
 
     (model_v, _), (model_c, _) = split_model(model_test, n_val)
 

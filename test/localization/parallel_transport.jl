@@ -5,7 +5,8 @@
     Umin, _ = parallel_transport(model)
 
     Uref = read_amn(dataset"Si2_valence_coarse/outputs/ptg.amn").A
-    @test isapprox(Umin, Uref; atol = 1.0e-5)
+    # Umin is nested, Uref is dense
+    @test isapprox(cat(Umin...; dims = 3), Uref; atol = 1.0e-5)
 
     ϵ0, ϵ1 = Wannier.compute_error(model, Umin)
     ϵ0_ref = 0.8166518514231456
@@ -25,7 +26,7 @@ end
     Umin, _ = parallel_transport(model)
 
     Uref = read_amn(dataset"GaAs_coarse/outputs/GaAs.val.ptg.amn").A
-    @test isapprox(Umin, Uref; atol = 1.0e-5)
+    @test isapprox(cat(Umin...; dims = 3), Uref; atol = 1.0e-5)
 
     ϵ0, ϵ1 = Wannier.compute_error(model, Umin)
 

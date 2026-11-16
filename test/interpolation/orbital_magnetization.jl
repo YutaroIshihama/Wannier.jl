@@ -95,9 +95,8 @@ end
     # around 1e-4, this is because the kpoints coordinates do not have enough
     # digits. Therefore, I read the win file and construct the kpoints myself.
     # kpoints = ref_kpt.kpoints
-    kseg = KSegment(reciprocal_lattice(win["unit_cell_cart"]), win["kpoint_path"])
-    kpath = KPath(kseg, COARSE ? 5 : 100)
-    kpoints = collect(kpath)
+    kpath = KPath(reciprocal_lattice(win["unit_cell_cart"]), win["kpoint_path"]; n_points_first_segment = COARSE ? 5 : 100)
+    kpoints = Wannier.kpoints(kpath)
     # postw90.x has a bug, it misses the `H` point
     ik_H = COARSE ? 22 : 417
     deleteat!(kpoints, ik_H)

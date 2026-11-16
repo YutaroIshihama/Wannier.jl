@@ -9,7 +9,9 @@
     )
     Hᵏ = transform_gauge(model.eigenvalues, model.gauges)
     Hᴿ = fourier(model.kpoints, Hᵏ, Rspace)
-    @test all(isapprox.(ref_Hᴿ, Hᴿ; atol = 5.0e-7))
+    # ref_Hᴿ is dense (nwann x nwann x nR), Hᴿ is nested
+    Hᴿ_dense = cat(Hᴿ...; dims = 3)
+    @test all(isapprox.(ref_Hᴿ, Hᴿ_dense; atol = 5.0e-7))
 end
 
 @testitem "invfourier" begin
@@ -19,6 +21,7 @@ end
     kpoints = ref_band.kpoints
 
     Hᵏ = invfourier(hamiltonian, kpoints)
-    eigenvals, eigenvecs = eigen(Hᵏ)
+    Hᵏ_nested = Hᵏ isa AbstractArray{<:Any, 3} ? [Matrix(Hᵏ[:, :, ik]) for ik in axes(Hᵏ, 3)] : Hᵏ
+    eigenvals = hcat([eigen(m).values for m in Hᵏ_nested]...)
     @test all(isapprox.(eigenvals, ref_band.eigenvalues; atol = 2.0e-5))
 end

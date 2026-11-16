@@ -15,7 +15,8 @@ end
 @testitem "compute_fermi_energy graphene" begin
     using Wannier.Datasets
     model = load_dataset("graphene_coarse"; prefix = "graphene")
-    model.gauges .= read_amn(dataset"graphene_coarse/outputs/graphene.dis.amn").A
+    _Udis2 = read_amn(dataset"graphene_coarse/outputs/graphene.dis.amn").A
+    model.gauges .= [Matrix(_Udis2[:, :, ik]) for ik in axes(_Udis2, 3)]
     hamiltonian = TBHamiltonian(model)
     interp = HamiltonianInterpolator(hamiltonian)
     # on purposely choose 5x5x1 since this grid skips the K point, and

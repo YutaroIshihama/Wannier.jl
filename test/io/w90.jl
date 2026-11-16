@@ -1,12 +1,13 @@
+
 @testitem "read nnkp" begin
     using Wannier.Datasets
     kstencil = read_nnkp_compute_bweights(dataset"Si2_valence/outputs/Si2_valence.nnkp")
     nnkp = read_nnkp(dataset"Si2_valence/outputs/Si2_valence.nnkp.toml")
 
-    @test reciprocal_lattice(kstencil) ≈ nnkp["recip_lattice"]
-    @test kstencil.kpoints ≈ nnkp["kpoints"]
-    @test kstencil.kpb_k == nnkp["kpb_k"]
-    @test kstencil.kpb_G == nnkp["kpb_G"]
+    @test reciprocal_lattice(kstencil) ≈ nnkp.recip_lattice
+    @test kstencil.kpoints ≈ nnkp.kpoints
+    @test kstencil.kpb_k == [[nnkp.kpb_k[ib, ik] for ib in axes(nnkp.kpb_k, 1)] for ik in axes(nnkp.kpb_k, 2)]
+    @test kstencil.kpb_G == [[nnkp.kpb_G[ib, ik] for ib in axes(nnkp.kpb_G, 1)] for ik in axes(nnkp.kpb_G, 2)]
 
     # copied from wout file
     ref_bvectors = [

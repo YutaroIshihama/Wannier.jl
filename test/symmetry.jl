@@ -1,8 +1,9 @@
+
 @testitem "rescale" begin
-    using WannierIO: RepMatBand
+    using WannierIO: LittleGroupRep
 
     d = [1.0 0.0; 0.0 1 - 1.0e-4]
-    rep = RepMatBand{2}(1, 1, d)
+    rep = LittleGroupRep(1, 1, d)
     r = Wannier.rescale(rep)
     ref = [1.0 0.0; 0.0 1.0]
 
@@ -47,8 +48,8 @@ end
     nnkp = read_nnkp(dataset"Si2_hse/outputs/Si2.nnkp")
     isym = read_isym(dataset"Si2_hse/Si2.isym")
 
-    centers = [p.center for p in nnkp["projections"]]
-    Rs = Wannier.find_wf_symmetry_translations(centers, isym.symops, isym.repmat_wann)
+    centers = [p.center for p in nnkp.projections]
+    Rs = Wannier.find_wf_symmetry_translations(centers, isym.symops, isym.orbital_reps)
 
     ref, header = readdlm(
         dataset"Si2_hse/outputs/test/R_translations.txt",
@@ -69,17 +70,17 @@ end
 
     nnkp = read_nnkp(dataset"Si2_hse/outputs/Si2.nnkp")
     kstencil = Wannier.KspaceStencil(
-        nnkp["recip_lattice"], nnkp["kpoints"], nnkp["kpb_k"], nnkp["kpb_G"]
+        nnkp.recip_lattice, nnkp.kpoints, [[nnkp.kpb_k[ib, ik] for ib in axes(nnkp.kpb_k, 1)] for ik in axes(nnkp.kpb_k, 2)], [[nnkp.kpb_G[ib, ik] for ib in axes(nnkp.kpb_G, 1)] for ik in axes(nnkp.kpb_G, 2)]
     )
     isym = read_isym(dataset"Si2_hse/Si2.isym")
-    Wannier.rescale!(isym.repmat_band)
+    Wannier.rescale!(isym.littlegroup_reps)
 
-    centers = [p.center for p in nnkp["projections"]]
-    Rs = Wannier.find_wf_symmetry_translations(centers, isym.symops, isym.repmat_wann)
+    centers = [p.center for p in nnkp.projections]
+    Rs = Wannier.find_wf_symmetry_translations(centers, isym.symops, isym.orbital_reps)
 
     Ai = read_amn(dataset"Si2_hse/Si2.iamn").A
     Asymm = Wannier.symmetrize_gauges(
-        Ai, isym.kpoints_ibz, isym.symops, isym.repmat_band, isym.repmat_wann, Rs
+        Ai, isym.kpoints_ibz, isym.symops, isym.littlegroup_reps, isym.orbital_reps, Rs
     )
 
     ref = read_amn(dataset"Si2_hse/outputs/test/symmetrized.iamn").A
@@ -92,18 +93,18 @@ end
 
     nnkp = read_nnkp(dataset"Si2_hse/outputs/Si2.nnkp")
     kstencil = Wannier.KspaceStencil(
-        nnkp["recip_lattice"], nnkp["kpoints"], nnkp["kpb_k"], nnkp["kpb_G"]
+        nnkp.recip_lattice, nnkp.kpoints, [[nnkp.kpb_k[ib, ik] for ib in axes(nnkp.kpb_k, 1)] for ik in axes(nnkp.kpb_k, 2)], [[nnkp.kpb_G[ib, ik] for ib in axes(nnkp.kpb_G, 1)] for ik in axes(nnkp.kpb_G, 2)]
     )
     isym = read_isym(dataset"Si2_hse/Si2.isym")
-    Wannier.rescale!(isym.repmat_band)
+    Wannier.rescale!(isym.littlegroup_reps)
     f2i = get_kpoint_mappings(kstencil.kpoints, isym.kpoints_ibz, isym.symops)
 
-    centers = [p.center for p in nnkp["projections"]]
-    Rs = Wannier.find_wf_symmetry_translations(centers, isym.symops, isym.repmat_wann)
+    centers = [p.center for p in nnkp.projections]
+    Rs = Wannier.find_wf_symmetry_translations(centers, isym.symops, isym.orbital_reps)
 
     Asymm = read_amn(dataset"Si2_hse/outputs/test/symmetrized.iamn").A
     Af = Wannier.unfold_gauges(
-        Asymm, isym.kpoints_ibz, f2i, isym.symops, isym.repmat_wann, Rs
+        Asymm, isym.kpoints_ibz, f2i, isym.symops, isym.orbital_reps, Rs
     )
 
     ref = read_amn(dataset"Si2_hse/Si2.amn").A
@@ -118,7 +119,7 @@ end
     nnkp = read_nnkp(dataset"Si2_hse/outputs/Si2.nnkp")
     symops = read_isym(dataset"Si2_hse/Si2.isym").symops
     kstencil = Wannier.KspaceStencil(
-        nnkp["recip_lattice"], nnkp["kpoints"], nnkp["kpb_k"], nnkp["kpb_G"]
+        nnkp.recip_lattice, nnkp.kpoints, [[nnkp.kpb_k[ib, ik] for ib in axes(nnkp.kpb_k, 1)] for ik in axes(nnkp.kpb_k, 2)], [[nnkp.kpb_G[ib, ik] for ib in axes(nnkp.kpb_G, 1)] for ik in axes(nnkp.kpb_G, 2)]
     )
     bvecs = get_bvectors(kstencil; fractional = true)
 
@@ -148,10 +149,10 @@ end
 
     nnkp = read_nnkp(dataset"Si2_hse/outputs/Si2.nnkp")
     kstencil = Wannier.KspaceStencil(
-        nnkp["recip_lattice"], nnkp["kpoints"], nnkp["kpb_k"], nnkp["kpb_G"]
+        nnkp.recip_lattice, nnkp.kpoints, [[nnkp.kpb_k[ib, ik] for ib in axes(nnkp.kpb_k, 1)] for ik in axes(nnkp.kpb_k, 2)], [[nnkp.kpb_G[ib, ik] for ib in axes(nnkp.kpb_G, 1)] for ik in axes(nnkp.kpb_G, 2)]
     )
     isym = read_isym(dataset"Si2_hse/Si2.isym")
-    Wannier.rescale!(isym.repmat_band)
+    Wannier.rescale!(isym.littlegroup_reps)
     f2i = get_kpoint_mappings(kstencil.kpoints, isym.kpoints_ibz, isym.symops)
 
     mmn_i = read_mmn(dataset"Si2_hse/Si2.immn")
@@ -170,7 +171,7 @@ end
         f2i,
         isym.spinors,
         isym.symops,
-        isym.repmat_band,
+        isym.littlegroup_reps,
     )
 
     mmn_ref = read_mmn(dataset"Si2_hse/Si2.mmn")
